@@ -243,8 +243,12 @@ daemon, so this is informational only, with a reminder to use
 ### Building
 
 ```sh
-go build -o boring-vpn ./cmd/boring-vpn
+make build-vpn
 ```
+
+The binary lands in `./dist/boring-vpn`. This pulls in `boring-vpn`'s own
+(much heavier) dependencies -- a userspace network stack, netlink -- the
+first time; `boring`'s own build is never affected by them.
 
 ## Further Links
 * pkg.go.dev: https://pkg.go.dev/github.com/alebeck/boring

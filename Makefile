@@ -1,10 +1,12 @@
 # Makefile for building and testing `boring`
 # Usage:
-#   make / make build    - Build the binary
-#   make build-grid      - Cross-compile for all OS/ARCH
-#   make test            - Run tests
-#   make cover           - Run tests with coverage
-#   make cover-html      - Generate interactive HTML report
+#   make / make build       - Build the binary
+#   make build-grid         - Cross-compile for all OS/ARCH
+#   make build-vpn          - Build the boring-vpn binary (separate, heavier deps)
+#   make build-vpn-grid     - Cross-compile boring-vpn for all OS/ARCH
+#   make test               - Run tests
+#   make cover              - Run tests with coverage
+#   make cover-html         - Generate interactive HTML report
 
 TAG := $(shell git describe --tags --exact-match 2>/dev/null)
 VERSION := $(TAG:v%=%)
@@ -33,6 +35,23 @@ build-grid:
 			GOOS=$(os) GOARCH=$(arch) $(MAKE) build; \
 			tar -czf $(DIST_DIR)/boring-$(TAG)-$(os)-$(arch).tar.gz LICENSE -C $(DIST_DIR) boring; \
 			rm -f $(DIST_DIR)/boring; \
+		) \
+	)
+
+# boring-vpn is a separate binary with its own (much heavier) dependency
+# graph -- see CONTRIBUTING.md. Kept out of the default `build`/`build-grid`
+# targets so `make` for plain `boring` never needs to fetch them.
+build-vpn:
+	go build -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/boring-vpn ./cmd/boring-vpn
+
+build-vpn-grid:
+	mkdir -p $(DIST_DIR)
+	$(foreach os,darwin linux, \
+		$(foreach arch,arm64 amd64, \
+			echo "Building boring-vpn for $(os)/$(arch)"; \
+			GOOS=$(os) GOARCH=$(arch) $(MAKE) build-vpn; \
+			tar -czf $(DIST_DIR)/boring-vpn-$(TAG)-$(os)-$(arch).tar.gz LICENSE -C $(DIST_DIR) boring-vpn; \
+			rm -f $(DIST_DIR)/boring-vpn; \
 		) \
 	)
 
