@@ -70,7 +70,15 @@ func (s *Session) Open() (err error) {
 }
 
 func (s *Session) prepare() error {
-	if _, isSudo := detectSudoUser(); !isSudo {
+	_, isSudo, err := detectSudoUser()
+	if err != nil {
+		// We know we're running under sudo but couldn't reliably
+		// determine who as -- this must not be treated the same as
+		// "not running under sudo", which would silently resolve SSH
+		// config as root instead (see detectSudoUser).
+		return err
+	}
+	if !isSudo {
 		// We're not running as root via sudo -- either a genuine root
 		// login or an unprivileged process (which will fail the
 		// privilege check before ever reaching this point). Either way,
@@ -84,7 +92,6 @@ func (s *Session) prepare() error {
 		}
 	}
 
-	var err error
 	if s.subnets, err = parseCIDRs(s.Subnets); err != nil {
 		return fmt.Errorf("subnets: %v", err)
 	}
@@ -116,7 +123,11 @@ func parseCIDRs(specs []string) ([]*net.IPNet, error) {
 // under sudo, or via a privilege-dropped helper (running as the
 // invoking user) if we are. See conn.go for why the split exists.
 func (s *Session) makeClient() error {
-	if su, ok := detectSudoUser(); ok {
+	su, isSudo, err := detectSudoUser()
+	if err != nil {
+		return err
+	}
+	if isSudo {
 		c, err := dialRemote(su, dialRemoteRequest{
 			Name: s.Name, Host: s.Host, User: s.User,
 			Port: s.Port.String(), IdentityFile: s.IdentityFile, KeepAlive: s.KeepAlive,
