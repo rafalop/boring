@@ -16,6 +16,7 @@ import (
 	"github.com/alebeck/boring/internal/log"
 	"github.com/alebeck/boring/internal/table"
 	"github.com/alebeck/boring/internal/tunnel"
+	"github.com/alebeck/boring/internal/vpn"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -218,8 +219,18 @@ func listTunnels(args []string) {
 		log.Fatalf("Could not list tunnels: %v", err)
 	}
 
+	// Best-effort: boring-vpn has its own config file and daemon, so this
+	// is purely informational -- silently show nothing if it's not set up.
+	var vpns []vpn.Desc
+	if groupFilter == "" {
+		if vconf, err := vpn.Load(); err == nil {
+			vpns = vconf.Vpns
+		}
+	}
+
 	if len(ts) == 0 && len(conf.Tunnels) == 0 {
 		log.Infof("No tunnels configured.")
+		printVpnHint(vpns)
 		return
 	}
 
@@ -244,6 +255,23 @@ func listTunnels(args []string) {
 	}
 
 	printTunnelList(all)
+	printVpnHint(vpns)
+}
+
+// printVpnHint shows vpns configured for boring-vpn (a separate tool with
+// its own config file and daemon), pointing users at it since `boring`
+// itself has no way to start or stop them.
+func printVpnHint(vpns []vpn.Desc) {
+	if len(vpns) == 0 {
+		return
+	}
+	log.Emitf("\n%s[vpns]%s (start with %ssudo boring-vpn up <name>%s)\n",
+		log.Bold+log.Blue, log.Reset, log.Bold, log.Reset)
+	tbl := table.New("Name", "Subnets", "Via")
+	for _, v := range vpns {
+		tbl.AddRow(v.Name, strings.Join(v.Subnets, ", "), v.Host)
+	}
+	log.Emitf("%v", tbl)
 }
 
 // orderTunnelsForList combines configured and running tunnels into an ordered slice.

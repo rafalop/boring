@@ -161,6 +161,91 @@ source <(boring --shell zsh)
 ```sh
 boring --shell fish | source
 ```
+
+## `boring-vpn` (experimental)
+
+`boring-vpn` is a separate, standalone binary in this repository that adds
+sshuttle-style subnet routing over an SSH connection: instead of forwarding a
+single port, it transparently routes all traffic for one or more
+subnets/IPs through an SSH connection. It is entirely independent of
+`boring` -- separate binary, separate config file, separate daemon and
+socket -- so building or running `boring` never pulls in any of
+`boring-vpn`'s dependencies or behavior.
+
+### How it works
+
+No IP packets are actually tunneled to the remote host. Locally, a TUN
+device plus a userspace TCP/IP stack terminate each TCP connection captured
+for a routed subnet, then forward it through a plain SSH `direct-tcpip`
+channel -- the same mechanism `ssh -L` uses -- to the real destination. The
+remote side just needs an ordinary, unprivileged SSH login
+(`AllowTcpForwarding yes`, the default); no extra software, root, or TUN
+device is needed there.
+
+### Requirements & limitations (v1)
+
+* **Linux and macOS only.** Not supported on Windows yet.
+* **TCP only.** No UDP forwarding and no DNS interception -- point your
+  resolver at the remote network directly if you need that.
+* **Requires root.** The daemon creates a TUN device and modifies routing
+  tables, so every `boring-vpn` command needs to run as root.
+* **macOS routing is unverified on real hardware.** It's implemented
+  against documented `ifconfig`/`route` behavior but hasn't been tested on
+  an actual Mac yet.
+
+### Configuration
+
+`boring-vpn` reads its own config file, independent of `.boring.toml`:
+`~/.boring-vpn.toml` on macOS, `$XDG_CONFIG_HOME/boring-vpn/.boring-vpn.toml`
+on Linux (override with `$BORING_VPN_CONFIG`).
+
+```toml
+[[vpns]]
+name = "office-vpn"
+host = "bastion"                        # matches ssh config, like boring
+subnets = ["10.0.0.0/8", "192.168.50.0/24"]
+exclude_subnets = ["10.0.5.0/24"]       # optional: keep this going through the normal route
+mtu = 1420                               # optional, defaults to 1420
+```
+
+| **Option**        | **Description**                                                                                       |
+|--------------------|--------------------------------------------------------------------------------------------------------|
+| `name`             | Name for the vpn. **Required.**                                                                        |
+| `host`             | Host alias (matches SSH config) or hostname. **Required.**                                             |
+| `subnets`          | CIDR ranges to route through the tunnel. **Required**, at least one.                                   |
+| `exclude_subnets`  | (Optional) CIDR ranges to keep routing normally, even if they fall inside `subnets`.                    |
+| `mtu`              | (Optional) TUN device MTU. Defaults to 1420.                                                            |
+| `user`, `identity`, `port`, `keep_alive` | Same meaning as for `boring` tunnels.                                            |
+
+### Usage
+
+```
+Usage:
+  boring-vpn list, ls                      List all vpns
+  boring-vpn up (-a | <patterns>...)       Start vpns matching any glob pattern
+  boring-vpn down (-a | <patterns>...)     Stop vpns (same options as 'up')
+  boring-vpn edit, e                       Edit the configuration file
+  boring-vpn version, v                    Show the version number
+  boring-vpn help, h                       Show this help message
+```
+
+Since the daemon runs as root, every command needs it too:
+
+```sh
+sudo boring-vpn up office-vpn
+```
+
+Running `boring list` also shows any vpns you have configured, since they're
+easy to forget about otherwise -- `boring` and `boring-vpn` don't share a
+daemon, so this is informational only, with a reminder to use
+`sudo boring-vpn up`.
+
+### Building
+
+```sh
+go build -o boring-vpn ./cmd/boring-vpn
+```
+
 ## Further Links
 * pkg.go.dev: https://pkg.go.dev/github.com/alebeck/boring
 * Coveralls: https://coveralls.io/github/alebeck/boring?branch=main
