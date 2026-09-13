@@ -22,6 +22,13 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Run as the privilege-dropped SSH connection helper? (spawned by
+	// the daemon itself, never invoked directly by a user)
+	if len(os.Args) == 2 && os.Args[1] == vpnd.SSHHelperFlag {
+		vpnd.RunSSHHelper()
+		os.Exit(0)
+	}
+
 	initLogging()
 
 	if len(os.Args) < 2 {

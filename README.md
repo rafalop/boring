@@ -240,6 +240,32 @@ easy to forget about otherwise -- `boring` and `boring-vpn` don't share a
 daemon, so this is informational only, with a reminder to use
 `sudo boring-vpn up`.
 
+#### SSH authentication under sudo
+
+Since the daemon has to run as root, it resolves your SSH connection
+through a privilege-dropped helper that runs as the user named in
+`$SUDO_USER` -- so `~/.ssh/config`, `known_hosts`, and identity files all
+resolve exactly as they would in your own shell. The one thing that
+doesn't carry over automatically is `ssh-agent`: `sudo` strips
+`$SSH_AUTH_SOCK` by default, and there's no way to recover that value
+afterward -- it isn't hidden, it's simply never passed through.
+
+If you authenticate with an explicit `identity` file, this doesn't affect
+you at all. If you rely on `ssh-agent` (e.g. a hardware token or a key
+you don't keep unencrypted on disk), either:
+
+```sh
+sudo --preserve-env=SSH_AUTH_SOCK boring-vpn up office-vpn
+```
+
+or add `Defaults env_keep += "SSH_AUTH_SOCK"` to your sudoers file (`visudo`)
+so it survives every time. Prefer `--preserve-env=SSH_AUTH_SOCK` over the
+broader `sudo -E`: both pass through this one variable equally well and
+neither leaks something like `LD_PRELOAD` (sudo strips that regardless of
+`-E`), but plain `-E` also hands the daemon your entire environment --
+`$HOME` included -- for no benefit here, since the privilege-dropped helper
+already resolves `$HOME` correctly on its own.
+
 ### Building
 
 ```sh
